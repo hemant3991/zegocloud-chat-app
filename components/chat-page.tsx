@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Send, LogOut, Users, Menu, X } from "lucide-react"
+import { useZegoCloud } from '@/hooks/use-zegocloud';
 import { zegoService, type ZegoUser, type ZegoBroadcastMessage } from "@/lib/zegocloud-service"
 
 interface Message {
@@ -22,6 +23,7 @@ interface ChatPageProps {
 }
 
 export default function ChatPage({ username, onLogout }: ChatPageProps) {
+  const { service, isInitialized } = useZegoCloud()
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [onlineUsers, setOnlineUsers] = useState<ZegoUser[]>([])
@@ -42,8 +44,16 @@ export default function ChatPage({ username, onLogout }: ChatPageProps) {
   useEffect(() => {
     const initializeChat = async () => {
       try {
+        // Wait for the service to be initialized
+        if (!isInitialized) {
+          console.log("[ChatPage] Waiting for service to initialize...")
+          return
+        }
+
+        console.log("[ChatPage] Service initialized, setting up chat...")
+
         // Set up event listeners
-        zegoService.onMessageReceived = (message: ZegoBroadcastMessage) => {
+        service.onMessageReceived = (message: ZegoBroadcastMessage) => {
           const newMsg: Message = {
             id: message.messageID.toString(),
             username: message.fromUser.userName,
@@ -54,12 +64,12 @@ export default function ChatPage({ username, onLogout }: ChatPageProps) {
           setMessages((prev) => [...prev, newMsg])
         }
 
-        zegoService.onUserListUpdated = (users: ZegoUser[]) => {
+        service.onUserListUpdated = (users: ZegoUser[]) => {
           console.log("[ChatPage] User list updated:", users)
           setOnlineUsers(users)
         }
 
-        zegoService.onConnectionError = (error: string) => {
+        service.onConnectionError = (error: string) => {
           console.log("[ChatPage] Connection error received:", error)
           setConnectionError(error)
           setIsConnected(false)
@@ -67,7 +77,7 @@ export default function ChatPage({ username, onLogout }: ChatPageProps) {
 
         // Join the chat room
         console.log("[ChatPage] Attempting to join room...")
-        const success = await zegoService.joinRoom(username)
+        const success = await service.joinRoom(username)
         console.log("[ChatPage] Join room result:", success)
         
         // Force connection status update regardless of join result for demo mode
@@ -97,9 +107,9 @@ export default function ChatPage({ username, onLogout }: ChatPageProps) {
 
     // Cleanup on unmount
     return () => {
-      zegoService.destroy()
+      console.log("[ChatPage] Component unmounting, service cleanup handled by hook")
     }
-  }, [username])
+  }, [username, isInitialized, service])
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -141,7 +151,7 @@ export default function ChatPage({ username, onLogout }: ChatPageProps) {
 
   const handleLogout = async () => {
     try {
-      await zegoService.destroy()
+      console.log("[ChatPage] Logging out...")
       onLogout()
     } catch (error) {
       console.error("Error during logout:", error)
