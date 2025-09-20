@@ -33,69 +33,88 @@ class ZegoCloudService {
   public onUserListUpdated: ((users: ZegoUser[]) => void) | null = null
   public onConnectionError: ((error: string) => void) | null = null
 
+  private sdkLoadingPromise: Promise<void> | null = null;
+
+  private _loadSdk(): Promise<void> {
+    if (this.sdkLoadingPromise) {
+      return this.sdkLoadingPromise;
+    }
+
+    this.sdkLoadingPromise = new Promise((resolve, reject) => {
+      if (window.ZegoExpressEngine) {
+        console.log("[ZegoCloud] SDK already loaded.");
+        return resolve();
+      }
+
+      console.log("[ZegoCloud] Dynamically loading SDK script...");
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@zegocloud/zego-express-engine-webrtc@3.20.0/zego-express-engine-webrtc.js';
+      script.async = true;
+
+      script.onload = () => {
+        console.log("[ZegoCloud] SDK script loaded successfully via dynamic script.");
+        if (window.ZegoExpressEngine) {
+          resolve();
+        } else {
+          console.error("[ZegoCloud] Script loaded, but window.ZegoExpressEngine is not available.");
+          reject(new Error("SDK script loaded, but window.ZegoExpressEngine is not available."));
+        }
+      };
+
+      script.onerror = (error) => {
+        console.error("[ZegoCloud] Failed to load SDK script dynamically.", error);
+        reject(error);
+      };
+
+      document.head.appendChild(script);
+    });
+
+    return this.sdkLoadingPromise;
+  }
+
   async initialize(): Promise<boolean> {
     try {
-      console.log("[ZegoCloud] Starting initialization...")
+      console.log("[ZegoCloud] Starting initialization...");
       
-      // Wait longer for the SDK to load from CDN
-      let attempts = 0
-      const maxAttempts = 100 // 10 seconds max wait
+      await this._loadSdk();
 
-      console.log("[ZegoCloud] Waiting for SDK to load...")
-      while (!window.ZegoExpressEngine && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-        attempts++
-        if (attempts % 10 === 0) {
-          console.log(`[ZegoCloud] Still waiting for SDK... attempt ${attempts}/${maxAttempts}`)
-        }
-      }
-
-      if (!window.ZegoExpressEngine) {
-        console.error("[ZegoCloud] SDK not loaded after waiting, available globals:", Object.keys(window).filter(key => key.toLowerCase().includes('zego')))
-        console.log("[ZegoCloud] Falling back to demo mode")
-        // Fall back to demo mode if SDK fails to load
-        this.isInitialized = true
-        return true
-      }
-
-      console.log("[ZegoCloud] SDK loaded successfully! Available methods:", Object.keys(window.ZegoExpressEngine))
+      console.log("[ZegoCloud] SDK loaded successfully! Creating engine...");
 
       // Create the engine instance with your actual credentials
-      console.log("[ZegoCloud] Creating engine with appID:", ZEGOCLOUD_CONFIG.appID)
       this.engine = await window.ZegoExpressEngine.createEngine(
         ZEGOCLOUD_CONFIG.appID, 
         'wss://webliveroom-test.zegocloud.com/ws'
-      )
+      );
 
-      console.log("[ZegoCloud] Engine created successfully:", this.engine)
+      console.log("[ZegoCloud] Engine created successfully.");
 
       // Set up event listeners for real-time messaging
       this.engine.on('roomUserUpdate', (roomID: string, updateType: number, userList: any[]) => {
-        console.log('[ZegoCloud] Room user update:', roomID, updateType, userList)
-        this.handleUserUpdate(roomID, updateType, userList)
-      })
+        console.log('[ZegoCloud] Room user update:', roomID, updateType, userList);
+        this.handleUserUpdate(roomID, updateType, userList);
+      });
 
       this.engine.on('IMRecvBroadcastMessage', (roomID: string, chatData: any) => {
-        console.log('[ZegoCloud] Message received:', roomID, chatData)
-        this.handleIncomingMessage(roomID, chatData)
-      })
+        console.log('[ZegoCloud] Message received:', roomID, chatData);
+        this.handleIncomingMessage(roomID, chatData);
+      });
 
       this.engine.on('roomStateUpdate', (roomID: string, state: number, errorCode: number) => {
-        console.log('[ZegoCloud] Room state update:', roomID, state, errorCode)
+        console.log('[ZegoCloud] Room state update:', roomID, state, errorCode);
         if (errorCode !== 0) {
-          this.onConnectionError?.(`Room connection failed: ${errorCode}`)
+          this.onConnectionError?.(`Room connection failed: ${errorCode}`);
         }
-      })
+      });
 
-      this.isInitialized = true
-      console.log("[ZegoCloud] Real SDK initialized successfully with engine:", !!this.engine)
-      return true
+      this.isInitialized = true;
+      console.log("[ZegoCloud] Real SDK initialized successfully.");
+      return true;
     } catch (error) {
-      console.error("[ZegoCloud] Failed to initialize real SDK:", error)
-      console.log("[ZegoCloud] Falling back to demo mode")
+      console.error("[ZegoCloud] Failed to initialize real SDK:", error);
+      console.log("[ZegoCloud] Falling back to demo mode.");
       // Fall back to demo mode if real SDK fails
-      this.isInitialized = true
-      return true
+      this.isInitialized = true;
+      return true;
     }
   }
 
