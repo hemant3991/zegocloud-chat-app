@@ -24,6 +24,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <script
+          src="https://resource.zegocloud.com/webrtc/zego-express-engine-webrtc-3.20.0.js"
+          defer
+        ></script>
       </head>
       <body className={`font-sans ${inter.variable}`}>
         <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>

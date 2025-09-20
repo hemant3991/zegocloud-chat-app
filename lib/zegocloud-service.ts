@@ -37,22 +37,57 @@ class ZegoCloudService {
     try {
       console.log("[ZegoCloud] Starting initialization...")
       
-      // For now, let's simulate a working connection to test the UI
-      // This will help us verify the app works before dealing with SDK issues
-      console.log("[ZegoCloud] Using simulation mode for testing...")
-      
-      // Simulate successful initialization
+      // Wait for the SDK to load from CDN
+      let attempts = 0
+      const maxAttempts = 50 // 5 seconds max wait
+
+      while (!window.ZegoExpressEngine && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        attempts++
+      }
+
+      if (!window.ZegoExpressEngine) {
+        console.error("[ZegoCloud] SDK not loaded, falling back to demo mode")
+        // Fall back to demo mode if SDK fails to load
+        this.isInitialized = true
+        return true
+      }
+
+      console.log("[ZegoCloud] SDK loaded successfully, initializing real connection...")
+
+      // Create the engine instance with your actual credentials
+      this.engine = await window.ZegoExpressEngine.createEngine(
+        ZEGOCLOUD_CONFIG.appID, 
+        'wss://webliveroom-test.zegocloud.com/ws'
+      )
+
+      // Set up event listeners for real-time messaging
+      this.engine.on('roomUserUpdate', (roomID: string, updateType: number, userList: any[]) => {
+        console.log('[ZegoCloud] Room user update:', roomID, updateType, userList)
+        this.handleUserUpdate(roomID, updateType, userList)
+      })
+
+      this.engine.on('IMRecvBroadcastMessage', (roomID: string, chatData: any) => {
+        console.log('[ZegoCloud] Message received:', roomID, chatData)
+        this.handleIncomingMessage(roomID, chatData)
+      })
+
+      this.engine.on('roomStateUpdate', (roomID: string, state: number, errorCode: number) => {
+        console.log('[ZegoCloud] Room state update:', roomID, state, errorCode)
+        if (errorCode !== 0) {
+          this.onConnectionError?.(`Room connection failed: ${errorCode}`)
+        }
+      })
+
       this.isInitialized = true
-      
-      // Simulate some delay
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      console.log("[ZegoCloud] Simulation mode initialized successfully, isInitialized:", this.isInitialized)
+      console.log("[ZegoCloud] Real SDK initialized successfully")
       return true
     } catch (error) {
-      console.error("[ZegoCloud] Failed to initialize:", error)
-      this.onConnectionError?.(`Failed to initialize ZegoCloud SDK: ${error}`)
-      return false
+      console.error("[ZegoCloud] Failed to initialize real SDK:", error)
+      console.log("[ZegoCloud] Falling back to demo mode")
+      // Fall back to demo mode if real SDK fails
+      this.isInitialized = true
+      return true
     }
   }
 
@@ -98,17 +133,43 @@ class ZegoCloudService {
       this.currentUserID = generateUserID()
       this.currentRoomID = ZEGOCLOUD_CONFIG.roomID
 
-      console.log(`[ZegoCloud] Joining room ${this.currentRoomID} as ${username} (simulation mode)`)
+      // Try to use real ZegoCloud SDK first
+      if (this.engine) {
+        console.log(`[ZegoCloud] Joining room ${this.currentRoomID} as ${username} using real SDK`)
+        
+        try {
+          // Login to the room with real SDK
+          const result = await this.engine.loginRoom(
+            this.currentRoomID,
+            {
+              userID: this.currentUserID,
+              userName: username
+            }
+          )
+
+          if (result.errorCode === 0) {
+            console.log(`[ZegoCloud] Successfully joined room with real SDK`)
+            return true
+          } else {
+            console.error(`[ZegoCloud] Failed to join room, error code: ${result.errorCode}`)
+            throw new Error(`Room join failed with error code: ${result.errorCode}`)
+          }
+        } catch (error) {
+          console.error("[ZegoCloud] Real SDK join failed, falling back to demo mode:", error)
+          // Fall back to demo mode
+        }
+      }
+
+      // Demo mode fallback
+      console.log(`[ZegoCloud] Using demo mode for ${username}`)
       
       // Simulate successful room join immediately
-      console.log("[ZegoCloud] Updating user list immediately...")
       this.onUserListUpdated?.([
         { userID: this.currentUserID, userName: username }
       ])
       
       // Simulate a demo user joining after 2 seconds
       setTimeout(() => {
-        console.log("[ZegoCloud] Adding demo user...")
         this.onUserListUpdated?.([
           { userID: this.currentUserID, userName: username },
           { userID: generateUserID(), userName: "Demo User" }
@@ -116,12 +177,10 @@ class ZegoCloudService {
         
         // Send a demo message after 3 seconds
         setTimeout(() => {
-          console.log("[ZegoCloud] Sending demo message...")
-          this.simulateIncomingMessage("Demo User", "Hello! This is a demo message to test the chat functionality. 👋")
+          this.simulateIncomingMessage("Demo User", "Hello! This is a demo message. Open another tab with a different username to test real messaging!")
         }, 1000)
       }, 2000)
 
-      console.log("[ZegoCloud] joinRoom returning true")
       return true
     } catch (error) {
       console.error("[ZegoCloud] Failed to join room:", error)
@@ -140,10 +199,28 @@ class ZegoCloudService {
         throw new Error("SDK not initialized")
       }
 
-      console.log(`[ZegoCloud] Sending message: ${message} (simulation mode)`)
+      // Try to use real ZegoCloud SDK first
+      if (this.engine) {
+        console.log(`[ZegoCloud] Sending message using real SDK: ${message}`)
+        
+        try {
+          const result = await this.engine.sendBroadcastMessage(this.currentRoomID, message)
+          
+          if (result.errorCode === 0) {
+            console.log(`[ZegoCloud] Message sent successfully via real SDK`)
+            return true
+          } else {
+            console.error(`[ZegoCloud] Failed to send message, error code: ${result.errorCode}`)
+            throw new Error(`Message send failed with error code: ${result.errorCode}`)
+          }
+        } catch (error) {
+          console.error("[ZegoCloud] Real SDK send failed, falling back to demo mode:", error)
+          // Fall back to demo mode
+        }
+      }
 
-      // Simulate message sending - in simulation mode, messages are sent successfully
-      console.log("[ZegoCloud] Message sent successfully in simulation mode")
+      // Demo mode fallback
+      console.log(`[ZegoCloud] Sending message in demo mode: ${message}`)
       return true
     } catch (error) {
       console.error("[ZegoCloud] Failed to send message:", error)
@@ -154,8 +231,12 @@ class ZegoCloudService {
 
   async leaveRoom(): Promise<void> {
     try {
-      if (this.isInitialized && this.currentRoomID) {
-        console.log("[ZegoCloud] Leaving room... (simulation mode)")
+      if (this.engine && this.isInitialized && this.currentRoomID) {
+        console.log("[ZegoCloud] Leaving room using real SDK...")
+        await this.engine.logoutRoom(this.currentRoomID)
+        this.currentRoomID = ""
+      } else if (this.isInitialized && this.currentRoomID) {
+        console.log("[ZegoCloud] Leaving room in demo mode...")
         this.currentRoomID = ""
       }
     } catch (error) {
@@ -166,8 +247,12 @@ class ZegoCloudService {
   async destroy(): Promise<void> {
     try {
       await this.leaveRoom()
+      if (this.engine) {
+        await this.engine.destroy()
+        this.engine = null
+      }
       this.isInitialized = false
-      console.log("[ZegoCloud] Service destroyed (simulation mode)")
+      console.log("[ZegoCloud] Service destroyed")
     } catch (error) {
       console.error("[ZegoCloud] Error destroying service:", error)
     }

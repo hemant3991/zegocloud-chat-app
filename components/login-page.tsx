@@ -55,11 +55,11 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           <div className="text-xs text-slate-400 text-center mt-4 space-y-2">
             <p>Enter a username to start chatting with others in real-time</p>
             <div className="bg-slate-700 p-3 rounded-lg text-left">
-              <p className="font-semibold text-slate-300 mb-1">Demo Mode Active:</p>
-              <p className="text-xs">• The app is running in simulation mode for testing</p>
-              <p className="text-xs">• You'll see a demo user and message after joining</p>
-              <p className="text-xs">• Your messages will be sent successfully</p>
-              <p className="text-xs">• This demonstrates the UI functionality</p>
+              <p className="font-semibold text-slate-300 mb-1">Real-Time Chat:</p>
+              <p className="text-xs">• Uses your actual ZegoCloud credentials for live messaging</p>
+              <p className="text-xs">• Open multiple tabs with different usernames to test</p>
+              <p className="text-xs">• Falls back to demo mode if SDK fails to load</p>
+              <p className="text-xs">• Messages are sent to all connected users instantly</p>
             </div>
           </div>
         </CardContent>
