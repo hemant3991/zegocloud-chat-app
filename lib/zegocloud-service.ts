@@ -2,16 +2,6 @@
 import { ZEGOCLOUD_CONFIG, generateUserID } from "./zegocloud-config"
 
 // Define types for ZegoCloud SDK
-interface ZegoExpressEngine {
-  createEngine: (appID: number, server: string) => Promise<ZegoExpressEngine>
-  loginRoom: (roomID: string, user: { userID: string; userName: string }) => Promise<boolean>
-  logoutRoom: (roomID: string) => Promise<boolean>
-  sendBroadcastMessage: (roomID: string, message: string) => Promise<{ errorCode: number; messageID: number }>
-  on: (event: string, callback: (...args: any[]) => void) => void
-  off: (event: string, callback?: (...args: any[]) => void) => void
-  destroy: () => Promise<void>
-}
-
 interface ZegoUser {
   userID: string
   userName: string
@@ -26,16 +16,17 @@ interface ZegoBroadcastMessage {
 
 declare global {
   interface Window {
-    ZegoExpressEngine: {
-      createEngine: (appID: number, server: string) => Promise<ZegoExpressEngine>
-    }
+    ZegoExpressEngine: any
+    ZEGO: any
+    zegoSDK: any
   }
 }
 
 class ZegoCloudService {
-  private engine: ZegoExpressEngine | null = null
+  private engine: any = null
   private currentUserID = ""
   private isInitialized = false
+  private currentRoomID = ""
 
   // Callbacks
   public onMessageReceived: ((message: ZegoBroadcastMessage) => void) | null = null
@@ -44,69 +35,128 @@ class ZegoCloudService {
 
   async initialize(): Promise<boolean> {
     try {
-      // In a real implementation, you would load the ZegoCloud SDK script
-      // For now, we'll simulate the SDK functionality
-      console.log("[ZegoCloud] Initializing SDK...")
-
-      // Simulate SDK initialization
+      console.log("[ZegoCloud] Starting initialization...")
+      
+      // For now, let's simulate a working connection to test the UI
+      // This will help us verify the app works before dealing with SDK issues
+      console.log("[ZegoCloud] Using simulation mode for testing...")
+      
+      // Simulate successful initialization
       this.isInitialized = true
+      
+      // Simulate some delay
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      console.log("[ZegoCloud] Simulation mode initialized successfully, isInitialized:", this.isInitialized)
       return true
     } catch (error) {
       console.error("[ZegoCloud] Failed to initialize:", error)
-      this.onConnectionError?.("Failed to initialize ZegoCloud SDK")
+      this.onConnectionError?.(`Failed to initialize ZegoCloud SDK: ${error}`)
       return false
     }
   }
 
+  private handleUserUpdate(roomID: string, updateType: number, userList: any[]) {
+    if (roomID !== this.currentRoomID) return
+
+    const users: ZegoUser[] = userList.map(user => ({
+      userID: user.userID,
+      userName: user.userName
+    }))
+
+    this.onUserListUpdated?.(users)
+  }
+
+  private handleIncomingMessage(roomID: string, chatData: any) {
+    if (roomID !== this.currentRoomID) return
+
+    const message: ZegoBroadcastMessage = {
+      message: chatData.message,
+      messageID: chatData.messageID,
+      sendTime: chatData.timestamp,
+      fromUser: {
+        userID: chatData.fromUser.userID,
+        userName: chatData.fromUser.userName
+      }
+    }
+
+    this.onMessageReceived?.(message)
+  }
+
   async joinRoom(username: string): Promise<boolean> {
     try {
+      console.log("[ZegoCloud] joinRoom called with username:", username)
+      console.log("[ZegoCloud] isInitialized before check:", this.isInitialized)
+      
       if (!this.isInitialized) {
-        await this.initialize()
+        console.log("[ZegoCloud] Not initialized, calling initialize...")
+        const success = await this.initialize()
+        console.log("[ZegoCloud] Initialize result:", success)
+        if (!success) return false
       }
 
       this.currentUserID = generateUserID()
+      this.currentRoomID = ZEGOCLOUD_CONFIG.roomID
 
-      // Simulate joining room
-      console.log(`[ZegoCloud] Joining room ${ZEGOCLOUD_CONFIG.roomID} as ${username}`)
-
-      // Simulate successful room join
+      console.log(`[ZegoCloud] Joining room ${this.currentRoomID} as ${username} (simulation mode)`)
+      
+      // Simulate successful room join immediately
+      console.log("[ZegoCloud] Updating user list immediately...")
+      this.onUserListUpdated?.([
+        { userID: this.currentUserID, userName: username }
+      ])
+      
+      // Simulate a demo user joining after 2 seconds
       setTimeout(() => {
-        // Simulate initial user list
-        this.onUserListUpdated?.([{ userID: this.currentUserID, userName: username }])
-      }, 500)
+        console.log("[ZegoCloud] Adding demo user...")
+        this.onUserListUpdated?.([
+          { userID: this.currentUserID, userName: username },
+          { userID: generateUserID(), userName: "Demo User" }
+        ])
+        
+        // Send a demo message after 3 seconds
+        setTimeout(() => {
+          console.log("[ZegoCloud] Sending demo message...")
+          this.simulateIncomingMessage("Demo User", "Hello! This is a demo message to test the chat functionality. 👋")
+        }, 1000)
+      }, 2000)
 
+      console.log("[ZegoCloud] joinRoom returning true")
       return true
     } catch (error) {
       console.error("[ZegoCloud] Failed to join room:", error)
-      this.onConnectionError?.("Failed to join chat room")
+      this.onConnectionError?.(`Failed to join chat room: ${error}`)
       return false
     }
   }
 
   async sendMessage(message: string): Promise<boolean> {
     try {
+      console.log("[ZegoCloud] sendMessage called with:", message)
+      console.log("[ZegoCloud] isInitialized:", this.isInitialized)
+      
       if (!this.isInitialized) {
+        console.log("[ZegoCloud] SDK not initialized for sending message")
         throw new Error("SDK not initialized")
       }
 
-      console.log(`[ZegoCloud] Sending message: ${message}`)
+      console.log(`[ZegoCloud] Sending message: ${message} (simulation mode)`)
 
-      // Simulate message sending
-      // In real implementation, this would use: this.engine.sendBroadcastMessage(ZEGOCLOUD_CONFIG.roomID, message)
-
+      // Simulate message sending - in simulation mode, messages are sent successfully
+      console.log("[ZegoCloud] Message sent successfully in simulation mode")
       return true
     } catch (error) {
       console.error("[ZegoCloud] Failed to send message:", error)
-      this.onConnectionError?.("Failed to send message")
+      this.onConnectionError?.(`Failed to send message: ${error}`)
       return false
     }
   }
 
   async leaveRoom(): Promise<void> {
     try {
-      if (this.engine && this.isInitialized) {
-        console.log("[ZegoCloud] Leaving room...")
-        // In real implementation: await this.engine.logoutRoom(ZEGOCLOUD_CONFIG.roomID)
+      if (this.isInitialized && this.currentRoomID) {
+        console.log("[ZegoCloud] Leaving room... (simulation mode)")
+        this.currentRoomID = ""
       }
     } catch (error) {
       console.error("[ZegoCloud] Error leaving room:", error)
@@ -116,18 +166,14 @@ class ZegoCloudService {
   async destroy(): Promise<void> {
     try {
       await this.leaveRoom()
-      if (this.engine) {
-        // In real implementation: await this.engine.destroy()
-        this.engine = null
-      }
       this.isInitialized = false
-      console.log("[ZegoCloud] Service destroyed")
+      console.log("[ZegoCloud] Service destroyed (simulation mode)")
     } catch (error) {
       console.error("[ZegoCloud] Error destroying service:", error)
     }
   }
 
-  // Simulate receiving messages (for demo purposes)
+  // Simulate receiving messages (for demo purposes when SDK is not available)
   simulateIncomingMessage(username: string, message: string): void {
     if (this.onMessageReceived) {
       const simulatedMessage: ZegoBroadcastMessage = {
@@ -143,7 +189,7 @@ class ZegoCloudService {
     }
   }
 
-  // Simulate user joining/leaving (for demo purposes)
+  // Simulate user joining/leaving (for demo purposes when SDK is not available)
   simulateUserUpdate(users: ZegoUser[]): void {
     this.onUserListUpdated?.(users)
   }
