@@ -37,29 +37,37 @@ class ZegoCloudService {
     try {
       console.log("[ZegoCloud] Starting initialization...")
       
-      // Wait for the SDK to load from CDN
+      // Wait longer for the SDK to load from CDN
       let attempts = 0
-      const maxAttempts = 50 // 5 seconds max wait
+      const maxAttempts = 100 // 10 seconds max wait
 
+      console.log("[ZegoCloud] Waiting for SDK to load...")
       while (!window.ZegoExpressEngine && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 100))
         attempts++
+        if (attempts % 10 === 0) {
+          console.log(`[ZegoCloud] Still waiting for SDK... attempt ${attempts}/${maxAttempts}`)
+        }
       }
 
       if (!window.ZegoExpressEngine) {
-        console.error("[ZegoCloud] SDK not loaded, falling back to demo mode")
+        console.error("[ZegoCloud] SDK not loaded after waiting, available globals:", Object.keys(window).filter(key => key.toLowerCase().includes('zego')))
+        console.log("[ZegoCloud] Falling back to demo mode")
         // Fall back to demo mode if SDK fails to load
         this.isInitialized = true
         return true
       }
 
-      console.log("[ZegoCloud] SDK loaded successfully, initializing real connection...")
+      console.log("[ZegoCloud] SDK loaded successfully! Available methods:", Object.keys(window.ZegoExpressEngine))
 
       // Create the engine instance with your actual credentials
+      console.log("[ZegoCloud] Creating engine with appID:", ZEGOCLOUD_CONFIG.appID)
       this.engine = await window.ZegoExpressEngine.createEngine(
         ZEGOCLOUD_CONFIG.appID, 
         'wss://webliveroom-test.zegocloud.com/ws'
       )
+
+      console.log("[ZegoCloud] Engine created successfully:", this.engine)
 
       // Set up event listeners for real-time messaging
       this.engine.on('roomUserUpdate', (roomID: string, updateType: number, userList: any[]) => {
@@ -80,7 +88,7 @@ class ZegoCloudService {
       })
 
       this.isInitialized = true
-      console.log("[ZegoCloud] Real SDK initialized successfully")
+      console.log("[ZegoCloud] Real SDK initialized successfully with engine:", !!this.engine)
       return true
     } catch (error) {
       console.error("[ZegoCloud] Failed to initialize real SDK:", error)

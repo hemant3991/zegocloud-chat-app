@@ -25,8 +25,8 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <script
-          src="https://resource.zegocloud.com/webrtc/zego-express-engine-webrtc-3.20.0.js"
-          defer
+          src="https://cdn.jsdelivr.net/npm/@zegocloud/zego-express-engine-webrtc@3.20.0/zego-express-engine-webrtc.js"
+          async
         ></script>
       </head>
       <body className={`font-sans ${inter.variable}`}>
